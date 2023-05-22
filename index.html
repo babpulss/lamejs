@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script src="lame.min.js"></script>
+  </head>
+  <body>
+    <input type="file" />
+    <audio controls src="" style="margin-top: 100px"></audio>
+    <script>
+      var mp3Encoder, maxSamples = 1152, wav, samplesLeft, config, dataBuffer, samplesRight;
+
+      document.querySelector("input").onchange = (e) => {encode(e.target.files[0])};
+
+      function encode(e) {
+        const fileReader = new FileReader();
+        fileReader.readAsArrayBuffer(e);
+        fileReader.onload = function (r) {
+          channels = 1; //1 for mono or 2 for stereo
+          sampleRate = 44100; //44.1khz (normal mp3 samplerate)
+          kbps = 256; //encode 128kbps mp3
+          const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, kbps);
+          var mp3Data = [];
+
+          sampleBlockSize = 1152; //can be anything but make it a multiple of 576 to make encoders life easier
+
+          var mp3Data = [];
+          let sampleChunk;
+          const arraybuffer = r.target.result;
+          const wav = lamejs.WavHeader.readHeader(new DataView(arraybuffer));
+          var dataView = new Int16Array(
+            arraybuffer,
+            wav.dataOffset,
+            wav.dataLen / 2
+          );
+          for (var i = 0; i < dataView.length; i += sampleBlockSize) {
+            sampleChunk = dataView.subarray(i, i + sampleBlockSize);
+            var mp3buf = mp3encoder.encodeBuffer(sampleChunk);
+            if (mp3buf.length > 0) {
+              mp3Data.push(mp3buf);
+            }
+          }
+          var mp3 = mp3encoder.flush(); //finish writing mp3
+
+          if (mp3.length > 0) {
+            mp3Data.push(new Int8Array(mp3));
+          }
+
+          var blob = new Blob(mp3Data, { type: "audio/mp3" });
+          var url = URL.createObjectURL(blob);
+          console.log("MP3 URl: ", url);
+          document.querySelector("audio").src = url;
+        };
+      }
+    </script>
+  </body>
+</html>
