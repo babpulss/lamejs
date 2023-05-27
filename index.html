@@ -6,44 +6,64 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
     <link rel="stylesheet" href="mvp.css" />
-    <script src="lame.min.js"></script>
+    <script defer src="lame.min.js"></script>
   </head>
   <body>
     <section>
       <aside>
-        <label>convert wave to mp3</label>
+        <label
+          >convert wave to mp3
+
+          <input type="text" placeholder="파일제목" />
+        </label>
         <input type="file" style="width: 90%" />
         <div style="display: flex">
           <select id="bitRate">
             <option>8</option>
-            <option selected>192</option>
+            <option selected>256</option>
           </select>
-          <span > kbit/s </span>
+          <span style="line-height: 2rem; margin-left: 0.5rem"> kbit/s </span>
         </div>
         <button>convert</button>
-        <audio controls src=""></audio>
+        <audio controls src="" controlsList="nodownload"></audio>
+        <a href="#"></a>
       </aside>
     </section>
+    <dialog style="top: -20rem">
+      <div>변환 중...</div>
+    </dialog>
     <script>
-      var appendToBuffer = function (mp3Buf) {
-        dataBuffer.push(new Int8Array(mp3Buf));
-      };
-      var mp3Encoder,
-        maxSamples = 1152,
+      var maxSamples = 1152,
         wav,
         samplesLeft,
-        config = {},
-        dataBuffer,
-        samplesRight;
+        bitRate,
+        dataBuffer = [],
+        samplesRight,
+        encodedFileName;
+
+      const dialog = document.querySelector("dialog");
+      const a = document.querySelector("a");
+      const audio = document.querySelector("audio");
+      const appendToBuffer = (mp3Buf) => {
+        dataBuffer.push(new Int8Array(mp3Buf));
+      };
+      const generateFileName = (fileName) => {
+        const [yyyyMMdd, hhmmss] = fileName.match(/\d+/g);
+        const noon = hhmmss.slice(0, 2) < 12 ? "오전" : "오후";
+        const inputFileName = document.querySelector("input").value;
+        encodedFileName = `${inputFileName} ${yyyyMMdd} ${noon}`;
+      };
 
       document.querySelector("button").onclick = () => {
-        const file = document.querySelector("input").files[0]
-        console.log(file.name)
+        const file = document.querySelector("input[type=file]").files[0];
         if (!file) {
-          alert("선택된 파일이 없음")
-          return
+          alert("선택된 파일이 없음");
+          return;
         }
-        config.bitRate = parseInt(document.querySelector("#bitRate").value, 10);
+        a.textContent = "";
+        dialog.showModal();
+        generateFileName(file.name);
+        bitRate = parseInt(document.querySelector("#bitRate").value);
         encode(file);
       };
 
@@ -54,7 +74,13 @@
         fileReader.onload = function (r) {
           const arraybuffer = r.target.result;
           wav = lamejs.WavHeader.readHeader(new DataView(arraybuffer));
-          var dataView = new Int16Array(
+          wav.channels = bitRate === 8 ? 1 : 2;
+          const mp3Encoder = new lamejs.Mp3Encoder(
+            wav.channels,
+            wav.sampleRate,
+            bitRate
+          );
+          const dataView = new Int16Array(
             arraybuffer,
             wav.dataOffset,
             wav.dataLen / 2
@@ -68,33 +94,31 @@
               ? new Int16Array(wav.dataLen / (2 * wav.channels))
               : undefined;
           if (wav.channels > 1) {
-            for (var i = 0; i < samplesLeft.length; i++) {
+            for (let i = 0; i < samplesLeft.length; i++) {
               samplesLeft[i] = dataView[i * 2];
               samplesRight[i] = dataView[i * 2 + 1];
             }
           }
-          mp3Encoder = new lamejs.Mp3Encoder(
-            wav.channels,
-            wav.sampleRate,
-            config?.bitRate || 96
-          );
-
-          var remaining = samplesLeft.length;
-          for (var i = 0; remaining >= maxSamples; i += maxSamples) {
-            var left = samplesLeft.subarray(i, i + maxSamples);
-            var right;
+          let remaining = samplesLeft.length;
+          for (let i = 0; remaining >= maxSamples; i += maxSamples) {
+            let left = samplesLeft.subarray(i, i + maxSamples);
+            let right;
             if (samplesRight) {
               right = samplesRight.subarray(i, i + maxSamples);
             }
-            var mp3buf = mp3Encoder.encodeBuffer(left, right);
-            appendToBuffer(mp3buf);
+            appendToBuffer(mp3Encoder.encodeBuffer(left, right));
             remaining -= maxSamples;
           }
-          var mp3buf = mp3Encoder.flush();
-          appendToBuffer(mp3buf);
+          appendToBuffer(mp3Encoder.flush());
+
           var mp3Blob = new Blob(dataBuffer, { type: "audio/mp3" });
-          var blobUrl = window.URL.createObjectURL(mp3Blob);
-          document.querySelector("audio").src = blobUrl;
+          var blobUrl = URL.createObjectURL(mp3Blob);
+          blobUrl.fileName = encodedFileName;
+          audio.src = blobUrl;
+          a.href = blobUrl;
+          a.download = encodedFileName;
+          a.textContent = `${encodedFileName}.mp3`;
+          dialog.close();
         };
       }
     </script>
