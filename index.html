@@ -7,6 +7,11 @@
     <title>Document</title>
     <link rel="stylesheet" href="mvp.css" />
     <script defer src="lame.min.js"></script>
+    <style>
+      body {
+        background-color: green;
+      }
+    </style>
   </head>
   <body>
     <section>
@@ -68,50 +73,33 @@
       };
 
       function encode(e) {
-        dataBuffer = [];
         const fileReader = new FileReader();
         fileReader.readAsArrayBuffer(e);
         fileReader.onload = function (r) {
-          const arraybuffer = r.target.result;
-          wav = lamejs.WavHeader.readHeader(new DataView(arraybuffer));
-          wav.channels = bitRate === 8 ? 1 : 2;
-          const mp3Encoder = new lamejs.Mp3Encoder(
-            wav.channels,
-            wav.sampleRate,
-            bitRate
-          );
-          const dataView = new Int16Array(
-            arraybuffer,
-            wav.dataOffset,
-            wav.dataLen / 2
-          );
-          samplesLeft =
-            wav.channels === 1
-              ? dataView
-              : new Int16Array(wav.dataLen / (2 * wav.channels));
-          samplesRight =
-            wav.channels === 2
-              ? new Int16Array(wav.dataLen / (2 * wav.channels))
-              : undefined;
-          if (wav.channels > 1) {
-            for (let i = 0; i < samplesLeft.length; i++) {
-              samplesLeft[i] = dataView[i * 2];
-              samplesRight[i] = dataView[i * 2 + 1];
-            }
-          }
-          let remaining = samplesLeft.length;
-          for (let i = 0; remaining >= maxSamples; i += maxSamples) {
-            let left = samplesLeft.subarray(i, i + maxSamples);
-            let right;
-            if (samplesRight) {
-              right = samplesRight.subarray(i, i + maxSamples);
-            }
-            appendToBuffer(mp3Encoder.encodeBuffer(left, right));
-            remaining -= maxSamples;
-          }
-          appendToBuffer(mp3Encoder.flush());
+          const channels = 1; //1 for mono or 2 for stereo
+          const sampleRate = 44100; //44.1khz (normal mp3 samplerate)
+          const kbps = 128; //encode 128kbps mp3
+          const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, kbps);
 
-          var mp3Blob = new Blob(dataBuffer, { type: "audio/mp3" });
+          console.log(r.target);
+          samples = new Int16Array(r.target.result); 
+          sampleBlockSize = 1152; //can be anything but make it a multiple of 576 to make encoders life easier
+
+          const mp3Data = [];
+          for (var i = 0; i < samples.length; i += sampleBlockSize) {
+            sampleChunk = samples.subarray(i, i + sampleBlockSize);
+            var mp3buf = mp3encoder.encodeBuffer(sampleChunk);
+            if (mp3buf.length > 0) {
+              mp3Data.push(...mp3buf);
+            }
+          }
+          var mp3buf = mp3encoder.flush(); //finish writing mp3
+
+          if (mp3buf.length > 0) {
+            mp3Data.push(...mp3buf);
+          }
+
+          var mp3Blob = new Blob(mp3Data, { type: "audio/mp3" });
           var blobUrl = URL.createObjectURL(mp3Blob);
           blobUrl.fileName = encodedFileName;
           audio.src = blobUrl;

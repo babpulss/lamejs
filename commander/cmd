@@ -1,0 +1,2 @@
+lame -b 256 -m s R_20230727-150432.wav output.mp3
+lame -b 8 -m m R_20230727-150432.wav output.mp3
